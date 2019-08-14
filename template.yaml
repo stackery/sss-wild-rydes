@@ -1,3 +1,163 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Transform: 'AWS::Serverless-2016-10-31'
-Resources: {}
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  FrontendContent:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-frontendc-${AWS::AccountId}
+      WebsiteConfiguration:
+        IndexDocument: index.html
+  PopulateFrontendContent:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-PopulateFrontendContent
+      Description: !Sub
+        - Stack ${StackTagName} Environment ${EnvironmentTagName} Function ${ResourceName}
+        - ResourceName: PopulateFrontendContent
+      CodeUri: src/PopulateFrontendContent
+      Handler: index.handler
+      Runtime: nodejs10.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Policies:
+        - AWSXrayWriteOnlyAccess
+        - S3CrudPolicy:
+            BucketName: !Ref FrontendContent
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:Admin*
+                - cognito-idp:DescribeIdentityProvider
+                - cognito-idp:DescribeResourceServer
+                - cognito-idp:DescribeUserPool
+                - cognito-idp:DescribeUserPoolClient
+                - cognito-idp:DescribeUserPoolDomain
+                - cognito-idp:GetGroup
+                - cognito-idp:ListGroups
+                - cognito-idp:ListUserPoolClients
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:UpdateGroup
+              Resource: !GetAtt UserPool.Arn
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref FrontendContent
+          BUCKET_ARN: !GetAtt FrontendContent.Arn
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_ARN: !GetAtt UserPool.Arn
+          API_URL: !Sub https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${Api.Stage}
+  PopulateFrontendContentDeployTrigger:
+    Type: Custom::FunctionDeployTrigger
+    Properties:
+      ServiceToken: !GetAtt PopulateFrontendContent.Arn
+      DeploymentTimestamp: !Ref DeploymentTimestamp
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      AliasAttributes:
+        - email
+        - preferred_username
+      UserPoolName: !Sub ${AWS::StackName}-UserPool
+      AutoVerifiedAttributes:
+        - email
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub
+        - ${ResourceName} From Stack ${StackTagName} Environment ${EnvironmentTagName}
+        - ResourceName: Api
+      StageName: !Ref EnvironmentAPIGatewayStageName
+      DefinitionBody:
+        swagger: '2.0'
+        info: {}
+        paths:
+          /ride:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RequestUnicorn.Arn}/invocations
+              responses: {}
+              security:
+                - WildRydes: []
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
+      Cors:
+        AllowHeaders: '''Authorization,Content-Type'''
+        AllowOrigin: '''*'''
+      Auth:
+        Authorizers:
+          WildRydes:
+            UserPoolArn: !GetAtt UserPool.Arn
+  RequestUnicorn:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-RequestUnicorn
+      Description: !Sub
+        - Stack ${StackTagName} Environment ${EnvironmentTagName} Function ${ResourceName}
+        - ResourceName: RequestUnicorn
+      CodeUri: src/RequestUnicorn
+      Handler: index.handler
+      Runtime: nodejs10.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Policies:
+        - AWSXrayWriteOnlyAccess
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Rides
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/${EnvironmentTagName}/*
+      Environment:
+        Variables:
+          UNICORN_STABLE_API: !Ref EnvConfigunicornStableApiAsString
+          TABLE_NAME: !Ref Rides
+          TABLE_ARN: !GetAtt Rides.Arn
+          SECRETS_NAMESPACE: !Sub /${EnvironmentTagName}/
+      Events:
+        ApiPOSTride:
+          Type: Api
+          Properties:
+            Path: /ride
+            Method: POST
+            RestApiId: !Ref Api
+  Rides:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: RideId
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: RideId
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      TableName: !Sub ${AWS::StackName}-Rides
+Parameters:
+  StackTagName:
+    Type: String
+    Description: Stack Name (injected by Stackery at deployment time)
+  EnvironmentTagName:
+    Type: String
+    Description: Environment Name (injected by Stackery at deployment time)
+  DeploymentTimestamp:
+    Type: Number
+    Description: Deployment preparation timestamp in milliseconds Since Epoch (injected by Stackery at deployment time)
+  EnvironmentAPIGatewayStageName:
+    Type: String
+    Description: Environment name used for API Gateway Stage names (injected by Stackery at deployment time)
+  EnvConfigunicornStableApiAsString:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /<EnvironmentName>/unicornStableApi
+Metadata:
+  EnvConfigParameters:
+    EnvConfigunicornStableApiAsString: unicornStableApi

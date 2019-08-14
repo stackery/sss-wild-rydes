@@ -1,0 +1,14 @@
+{
+  "RequestType": "Create",
+  "ServiceToken": "arn:aws:lambda:us-east-1:394493744367:function:sss-wild-rydes-development-PopulateFrontendContent",
+  "ResponseURL": "https://cloudformation-custom-resource-response-useast1.s3.amazonaws.com/arn%3Aaws%3Acloudformation%3Aus-east-1%3A394493744367%3Astack/sss-wild-rydes-development/512cfd30-b93c-11e9-8da7-126c5203d2c8%7CPopulateFrontendContentDeployTrigger%7C5e8f7d26-1341-4c5d-9c2e-8dcdcaad7fec?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20190807T175457Z&X-Amz-SignedHeaders=host&X-Amz-Expires=7200&X-Amz-Credential=AKIA6L7Q4OWTTYC3DXNI%2F20190807%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Signature=0e9288d53f68157c64b39c543c9790e37ca607a7273da6fd628e7d88786d6e1e",
+  "StackId": "arn:aws:cloudformation:us-east-1:394493744367:stack/sss-wild-rydes-development/512cfd30-b93c-11e9-8da7-126c5203d2c8",
+  "RequestId": "5e8f7d26-1341-4c5d-9c2e-8dcdcaad7fec",
+  "LogicalResourceId": "PopulateFrontendContentDeployTrigger",
+  "ResourceType": "Custom::FunctionDeployTrigger",
+  "ResourceProperties": {
+    "ServiceToken": "arn:aws:lambda:us-east-1:394493744367:function:sss-wild-rydes-development-PopulateFrontendContent",
+    "DeploymentTimestamp": "1565200399307"
+  }
+}
+
